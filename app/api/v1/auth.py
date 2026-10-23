@@ -37,7 +37,34 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 @router.post(
     "/login",
     response_model=Token,
-    summary="Login and obtain a JWT access token"
+    summary="Login and obtain a JWT access token",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "email": {"type": "string", "format": "email", "example": "jamoliddin@example.com"},
+                            "password": {"type": "string", "format": "password", "example": "StrongPassword123!"}
+                        },
+                        "required": ["email", "password"]
+                    }
+                },
+                "application/x-www-form-urlencoded": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "username": {"type": "string", "description": "Email address"},
+                            "password": {"type": "string", "description": "Password"}
+                        },
+                        "required": ["username", "password"]
+                    }
+                }
+            }
+        }
+    }
 )
 async def login(request: Request, db: Session = Depends(get_db)):
     """
