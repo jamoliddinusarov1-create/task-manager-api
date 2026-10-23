@@ -23,6 +23,6 @@ sudo systemctl restart taskmanager.service
 # 5. Sog'lomlik tekshiruvi (GET /health) - Imtihon talabi!
 sleep 3
 echo "🔍 Health check tekshirilmoqda..."
-curl -f http://127.0.0.1:8000/health || (echo "❌ Health check failed!" && exit 1)
+curl -f http://127.0.0.1:8001/health || (echo "❌ Health check failed!" && exit 1)
 
 echo "✅ Loyiha muvaffaqiyatli yangilandi va serverda to'liq ishlamoqda!"

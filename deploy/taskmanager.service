@@ -12,7 +12,7 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/home/ubuntu/task-manager-api
 EnvironmentFile=/home/ubuntu/task-manager-api/.env
-ExecStart=/home/ubuntu/task-manager-api/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
+ExecStart=/home/ubuntu/task-manager-api/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 4
 
 # Dastur to'xtab qolsa 5 soniya ichida qayta yurgizish
 Restart=always
