@@ -1,3 +1,10 @@
+"""
+Autentifikatsiya (Ro'yxatdan o'tish va Login) API yo'llari (Routers).
+NIMA UCHUN KERAK:
+- POST /auth/register — Yangi foydalanuvchini ro'yxatdan o'tkazish;
+- POST /auth/login — Login va parol orqali JWT access token olish.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
@@ -14,14 +21,15 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
     "/register",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Register a new user"
+    summary="Yangi foydalanuvchini ro'yxatdan o'tkazish"
 )
 def register(user_in: UserCreate, db: Session = Depends(get_db)):
     """
-    Register a new user.
-    - Ensures email is unique.
-    - Hashes password securely with bcrypt.
-    - Assigns normal user permissions (no high privilege role assigned).
+    IMTIHON TALABI BO'YICHA:
+    - Email takrorlanmasligi tekshiriladi (takrorlansa 400 xatolik);
+    - Parol bcrypt orqali xeshlangan holda saqlanadi;
+    - Oddiy ro'yxatdan o'tishda yuqori huquqli rol berilmaydi;
+    - Response da parol xeshi qaytarilmaydi.
     """
     existing_user = get_user_by_email(db, email=user_in.email)
     if existing_user:
@@ -37,7 +45,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 @router.post(
     "/login",
     response_model=Token,
-    summary="Login and obtain a JWT access token",
+    summary="Login qilish va JWT access token olish",
     openapi_extra={
         "requestBody": {
             "required": True,
@@ -68,10 +76,10 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 )
 async def login(request: Request, db: Session = Depends(get_db)):
     """
-    Authenticate user and return a JWT access token.
-    Supports both JSON payload ({"email": "...", "password": "..."})
-    and Form data (OAuth2 standard: username, password).
-    Returns 401 for invalid credentials.
+    IMTIHON TALABI BO'YICHA:
+    - To'g'ri login va parolga amal qilish muddati bor JWT access token qaytarish;
+    - Noto'g'ri login yoki parolga qat'iy 401 Unauthorized qaytarish;
+    - Swagger UI da bevosita JSON yoki Form data orqali ishlash imkoniyati mavjud.
     """
     content_type = request.headers.get("content-type", "")
     username = None

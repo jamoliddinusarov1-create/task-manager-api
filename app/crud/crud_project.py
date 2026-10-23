@@ -1,3 +1,11 @@
+"""
+Loyihalar (Project) bo'yicha ma'lumotlar bazasi amallari (CRUD).
+NIMA UCHUN KERAK:
+- Loyiha yaratish, ro'yxatini olish, tahrirlash va o'chirish;
+- Multi-tenancy (IDOR himoyasi): har bir amal faqat user_id bo'yicha chegaralangan;
+- 409 Conflict cheklovi: ichida vazifasi bor loyihani o'chirishni rad etish.
+"""
+
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
@@ -9,7 +17,10 @@ from app.schemas.project import ProjectCreate, ProjectUpdate
 
 
 def create_project(db: Session, project_in: ProjectCreate, user_id: int) -> Project:
-    """Create a project strictly owned by the authenticated user."""
+    """
+    Yangi shaxsiy loyiha yaratish.
+    Loyiha qat'iy ravishda joriy foydalanuvchiga (user_id) biriktiriladi.
+    """
     db_project = Project(
         name=project_in.name,
         description=project_in.description,
@@ -22,7 +33,10 @@ def create_project(db: Session, project_in: ProjectCreate, user_id: int) -> Proj
 
 
 def get_projects(db: Session, user_id: int, skip: int = 0, limit: int = 20) -> List[Project]:
-    """Retrieve all projects belonging to the specified user with pagination."""
+    """
+    Faqat joriy foydalanuvchiga tegishli loyihalar ro'yxatini pagination bilan olish.
+    Boshqa foydalanuvchilarning loyihalari hech qachon chiqmaydi.
+    """
     stmt = (
         select(Project)
         .where(Project.user_id == user_id)
@@ -34,7 +48,10 @@ def get_projects(db: Session, user_id: int, skip: int = 0, limit: int = 20) -> L
 
 
 def get_project_by_id(db: Session, project_id: int, user_id: int) -> Optional[Project]:
-    """Retrieve a project by ID strictly ensuring user ownership."""
+    """
+    ID va user_id bo'yicha loyihani olish.
+    Agar loyiha boshqa foydalanuvchiga tegishli bo'lsa, None qaytadi (va routerda 404 beriladi).
+    """
     stmt = (
         select(Project)
         .where(Project.id == project_id, Project.user_id == user_id)
@@ -47,7 +64,7 @@ def update_project(
     db_project: Project,
     project_in: ProjectUpdate
 ) -> Project:
-    """Update project fields."""
+    """Loyihaning nomi yoki tavsifini yangilash."""
     update_data = project_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_project, field, value)
@@ -58,8 +75,10 @@ def update_project(
 
 def delete_project(db: Session, db_project: Project) -> None:
     """
-    Delete a project.
-    Business Rule: Ichida vazifasi bor loyihani o'chirish 409 bilan rad etilsin.
+    Loyihani o'chirish.
+    DIQQAT (Muhim Biznes Qoidasi):
+    Ichida vazifasi (Task) bor loyihani o'chirish 409 Conflict bilan rad etiladi.
+    Bog'langan tarix yoki ma'lumotlar tasodifan o'chib ketishidan himoyalaydi.
     """
     task_count_stmt = select(func.count(Task.id)).where(Task.project_id == db_project.id)
     task_count = db.execute(task_count_stmt).scalar_one()

@@ -1,3 +1,11 @@
+"""
+Shaxsiy loyihalar (Projects) API yo'llari.
+NIMA UCHUN KERAK:
+- Foydalanuvchining shaxsiy loyihalarini to'liq boshqarish (CRUD);
+- Egalik va ruxsatlarni serverda tekshirish (boshqa foydalanuvchiga tegishli loyihaga 404 qaytarish);
+- Ichida vazifasi bor loyihani o'chirishni 409 Conflict bilan rad etish.
+"""
+
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -21,29 +29,32 @@ router = APIRouter(prefix="/projects", tags=["Projects"])
     "",
     response_model=ProjectResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a new personal project"
+    summary="Yangi shaxsiy loyiha yaratish"
 )
 def create_new_project(
     project_in: ProjectCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a project strictly tied to current authenticated user."""
+    """
+    Yangi loyiha yaratish.
+    Loyiha serverda avtomatik ravishda tokendan olingan `current_user.id` ga bog'lanadi.
+    """
     return create_project(db=db, project_in=project_in, user_id=current_user.id)
 
 
 @router.get(
     "",
     response_model=List[ProjectResponse],
-    summary="List all personal projects with pagination"
+    summary="Foydalanuvchining barcha loyihalari ro'yxatini olish (Pagination bilan)"
 )
 def list_projects(
-    skip: int = Query(0, ge=0, description="Offset for pagination"),
-    limit: int = Query(20, ge=1, le=100, description="Page limit"),
+    skip: int = Query(0, ge=0, description="Tashlab ketiladigan elementlar soni"),
+    limit: int = Query(20, ge=1, le=100, description="Bir sahifadagi elementlar soni"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Retrieve all projects belonging exclusively to current user."""
+    """Faqat tizimga kirgan foydalanuvchining o'z loyihalari ro'yxatini qaytaradi."""
     projects = get_projects(db=db, user_id=current_user.id, skip=skip, limit=limit)
     return projects
 
@@ -51,14 +62,17 @@ def list_projects(
 @router.get(
     "/{project_id}",
     response_model=ProjectResponse,
-    summary="Get project details by ID"
+    summary="Loyiha tafsilotini ID bo'yicha olish"
 )
 def get_project_details(
     project_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Retrieve project by ID. Returns 404 if not found or belongs to another user."""
+    """
+    ID bo'yicha loyihani olish.
+    Agar loyiha mavjud bo'lmasa yoki boshqa birovga tegishli bo'lsa -> 404 Not Found.
+    """
     project = get_project_by_id(db=db, project_id=project_id, user_id=current_user.id)
     if not project:
         raise HTTPException(
@@ -71,7 +85,7 @@ def get_project_details(
 @router.put(
     "/{project_id}",
     response_model=ProjectResponse,
-    summary="Update project by ID"
+    summary="Loyihani tahrirlash"
 )
 def update_project_by_id(
     project_id: int,
@@ -79,7 +93,7 @@ def update_project_by_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update project details."""
+    """Loyihaning nomi yoki tavsifini yangilash."""
     project = get_project_by_id(db=db, project_id=project_id, user_id=current_user.id)
     if not project:
         raise HTTPException(
@@ -92,7 +106,7 @@ def update_project_by_id(
 @router.delete(
     "/{project_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete a project by ID"
+    summary="Loyihani o'chirish (Agar vazifasi bo'lsa 409 xatolik)"
 )
 def delete_project_by_id(
     project_id: int,
@@ -100,8 +114,8 @@ def delete_project_by_id(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Delete a project.
-    Business Rule: Ichida vazifasi bor loyihani o'chirish 409 bilan rad etilsin.
+    IMTIHON TALABI BO'YICHA:
+    Ichida vazifasi bor loyihani o'chirish 409 Conflict bilan rad etilsin.
     """
     project = get_project_by_id(db=db, project_id=project_id, user_id=current_user.id)
     if not project:

@@ -1,3 +1,8 @@
+# Systemd Service fayli.
+# NIMA UCHUN KERAK:
+# FastAPI (Uvicorn) serverini Linux tizimida fon xizmati (daemon) sifatida doimiy ishlatish;
+# Server o'chib-yonsa yoki xatolik yuz bersa, dasturni avtomatik qayta ishga tushirish (Restart=always).
+
 [Unit]
 Description=FastAPI Task Manager Application Service
 After=network.target postgresql.service
@@ -9,6 +14,7 @@ WorkingDirectory=/home/ubuntu/task-manager-api
 EnvironmentFile=/home/ubuntu/task-manager-api/.env
 ExecStart=/home/ubuntu/task-manager-api/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
 
+# Dastur to'xtab qolsa 5 soniya ichida qayta yurgizish
 Restart=always
 RestartSec=5s
 KillMode=mixed

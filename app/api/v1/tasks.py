@@ -1,3 +1,14 @@
+"""
+Vazifalar (Tasks) API yo'llari.
+NIMA UCHUN KERAK:
+- Vazifa qo'shish, ro'yxatini olish, detailini ko'rish, tahrirlash va o'chirish;
+- Vazifani bajarilgan deb belgilash yoki qayta ochish (completed_at);
+- Vazifalarni loyiha va bajarilganlik holati bo'yicha filtrlash;
+- Ustuvorlik (high -> medium -> low) va muddat bo'yicha saralash;
+- Muddati o'tgan, bajarilmagan vazifalarni (overdue) chiqarish;
+- O'z vazifalari bo'yicha jami, bajarilgan va bajarilmagan sonlarni (statistika) olish.
+"""
+
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -29,16 +40,16 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 @router.get(
     "/stats",
     response_model=TaskStatsResponse,
-    summary="Get statistics on user's tasks"
+    summary="Foydalanuvchining vazifalari bo'yicha statistikasini olish"
 )
 def get_statistics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Business Rule:
+    IMTIHON TALABI BO'YICHA:
     O'z vazifalari bo'yicha jami, bajarilgan va bajarilmagan sonlarni olish.
-    Boshqa foydalanuvchilar ma'lumotlari hisoblanmaydi.
+    Boshqa foydalanuvchilar ma'lumotlari hisobga olinmaydi.
     """
     stats = get_task_statistics(db=db, user_id=current_user.id)
     return stats
@@ -47,7 +58,7 @@ def get_statistics(
 @router.get(
     "/overdue",
     response_model=List[TaskResponse],
-    summary="List overdue, uncompleted tasks"
+    summary="Muddati o'tgan va hali bajarilmagan vazifalar ro'yxati"
 )
 def list_overdue_tasks(
     skip: int = Query(0, ge=0),
@@ -56,9 +67,9 @@ def list_overdue_tasks(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Business Rule:
-    Overdue: deadline < hozir va vazifa bajarilmagan.
-    Bajarilgan eski vazifa overdue ro'yxatiga kirmasligi shart.
+    IMTIHON TALABI BO'YICHA:
+    Overdue: deadline < hozirgi vaqt VA vazifa hali bajarilmagan.
+    DIQQAT: Bajarilgan eski vazifa hech qachon overdue ro'yxatiga kirmasin!
     """
     return get_overdue_tasks(db=db, user_id=current_user.id, skip=skip, limit=limit)
 
@@ -67,7 +78,7 @@ def list_overdue_tasks(
     "",
     response_model=TaskResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a new task"
+    summary="Yangi vazifa yaratish"
 )
 def create_new_task(
     task_in: TaskCreate,
@@ -75,7 +86,8 @@ def create_new_task(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Create a new task attached to a project owned by current user.
+    Yangi vazifa yaratish.
+    BIZNES QOIDASI: Vazifa faqat egasining o'z loyihasiga bog'lanishi shart!
     """
     return create_task(db=db, task_in=task_in, user_id=current_user.id)
 
@@ -83,14 +95,14 @@ def create_new_task(
 @router.get(
     "",
     response_model=List[TaskResponse],
-    summary="List tasks with filtering and custom sorting"
+    summary="Vazifalar ro'yxatini filtrlash va maxsus saralash bilan olish"
 )
 def list_user_tasks(
-    project_id: Optional[int] = Query(None, description="Filter by project ID"),
-    completed: Optional[bool] = Query(None, description="Filter by completed status"),
+    project_id: Optional[int] = Query(None, description="Loyiha ID si bo'yicha filtrlash"),
+    completed: Optional[bool] = Query(None, description="Bajarilganlik holati bo'yicha filtrlash"),
     sort_by: Optional[str] = Query(
         "priority",
-        description="Sort: priority (high->low), priority_asc, deadline (earliest first), deadline_desc"
+        description="Saralash: priority (high->low), priority_asc, deadline (yaqin muddat birinchi), deadline_desc"
     ),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -98,9 +110,8 @@ def list_user_tasks(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Retrieve tasks for current user.
-    Business Rule:
-    Priority bo'yicha saralash alifbo tartibida emas, high -> medium -> low tartibida bo'lsin.
+    IMTIHON TALABI BO'YICHA:
+    Priority alifbo tartibida emas, high -> medium -> low tartibida saralansin.
     """
     return get_tasks(
         db=db,
@@ -116,14 +127,14 @@ def list_user_tasks(
 @router.get(
     "/{task_id}",
     response_model=TaskResponse,
-    summary="Get single task details"
+    summary="Vazifa tafsilotini ID bo'yicha olish"
 )
 def get_task_details(
     task_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Retrieve task details strictly verifying ownership."""
+    """Bitta vazifani olish. Boshqa birovning vazifasiga kirishga urinilsa -> 404 Not Found."""
     task = get_task_by_id(db=db, task_id=task_id, user_id=current_user.id)
     if not task:
         raise HTTPException(
@@ -136,7 +147,7 @@ def get_task_details(
 @router.put(
     "/{task_id}",
     response_model=TaskResponse,
-    summary="Update a task"
+    summary="Vazifani tahrirlash"
 )
 def update_task_details(
     task_id: int,
@@ -144,7 +155,7 @@ def update_task_details(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update task fields."""
+    """Vazifa maydonlarini (nom, tavsif, priority, deadline, loyiha) yangilash."""
     task = get_task_by_id(db=db, task_id=task_id, user_id=current_user.id)
     if not task:
         raise HTTPException(
@@ -157,7 +168,7 @@ def update_task_details(
 @router.patch(
     "/{task_id}/status",
     response_model=TaskResponse,
-    summary="Mark task as completed or reopen"
+    summary="Vazifani bajarilgan deb belgilash yoki qayta ochish"
 )
 def change_task_status(
     task_id: int,
@@ -166,8 +177,8 @@ def change_task_status(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Business Rule:
-    Bajarilganda completed_at o'rnatilsin; qayta ochilganda tozalansin (None).
+    IMTIHON TALABI BO'YICHA:
+    Bajarilganda completed_at o'rnatilsin (hozirgi vaqt); qayta ochilganda tozalansin (null).
     """
     task = get_task_by_id(db=db, task_id=task_id, user_id=current_user.id)
     if not task:
@@ -181,14 +192,14 @@ def change_task_status(
 @router.delete(
     "/{task_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete a task"
+    summary="Vazifani o'chirish"
 )
 def delete_task_by_id(
     task_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete task."""
+    """Vazifani o'chirish."""
     task = get_task_by_id(db=db, task_id=task_id, user_id=current_user.id)
     if not task:
         raise HTTPException(

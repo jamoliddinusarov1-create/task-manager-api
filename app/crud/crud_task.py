@@ -1,3 +1,15 @@
+"""
+Vazifalar (Task) bo'yicha barcha asosiy biznes amallari va ma'lumotlar bazasi so'rovlari (CRUD).
+NIMA UCHUN KERAK:
+- Vazifa qo'shish, ro'yxatini olish, tahrirlash va o'chirish;
+- Imtihonning barcha maxsus biznes qoidalarini bajarish:
+  1. Priority bo'yicha maxsus saralash (high -> medium -> low);
+  2. Faqat egasining loyihasiga bog'lash tekshiruvi;
+  3. Overdue: deadline < hozir va completed_at IS NULL;
+  4. Bajarilganda completed_at o'rnatish, qayta ochilganda tozalash;
+  5. Shaxsiy statistika (jami, bajarilgan, bajarilmagan, overdue).
+"""
+
 from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy.orm import Session
@@ -11,10 +23,11 @@ from app.schemas.task import TaskCreate, TaskUpdate
 
 def create_task(db: Session, task_in: TaskCreate, user_id: int) -> Task:
     """
-    Create a task.
-    Business Rule: Vazifa faqat egasining loyihasiga bog'lansin.
+    Yangi vazifa yaratish.
+    BIZNES QOIDASI: Vazifa faqat egasining loyihasiga bog'lansin.
+    Agar ko'rsatilgan project_id boshqa foydalanuvchiga tegishli bo'lsa, 404 qaytariladi.
     """
-    # Verify that the specified project exists and belongs to this user
+    # Berilgan loyiha aynan shu foydalanuvchiga tegishli ekanini tekshiramiz
     project_stmt = select(Project).where(
         Project.id == task_in.project_id,
         Project.user_id == user_id
@@ -26,7 +39,7 @@ def create_task(db: Session, task_in: TaskCreate, user_id: int) -> Task:
             detail="Project not found or you do not have permission to attach tasks to it."
         )
 
-    # Normalize deadline timezone to UTC if provided
+    # Muddat (deadline) vaqtini UTC formatga keltirish
     deadline = task_in.deadline
     if deadline and deadline.tzinfo is None:
         deadline = deadline.replace(tzinfo=timezone.utc)
@@ -51,27 +64,28 @@ def get_tasks(
     user_id: int,
     project_id: Optional[int] = None,
     completed: Optional[bool] = None,
-    sort_by: Optional[str] = None,  # "priority_asc", "priority_desc", "deadline_asc", "deadline_desc"
+    sort_by: Optional[str] = None,
     skip: int = 0,
     limit: int = 20
 ) -> List[Task]:
     """
-    Retrieve tasks belonging exclusively to current user with filtering and sorting.
-    Business Rule: Saralash alifbo emas, high -> medium -> low tartibida.
+    Faqat joriy foydalanuvchiga tegishli vazifalarni filtrlash va saralash bilan olish.
+    BIZNES QOIDASI:
+    Ustuvorlik bo'yicha saralash alifbo emas, high (1) -> medium (2) -> low (3) tartibida bo'lsin.
     """
     stmt = select(Task).where(Task.user_id == user_id)
 
-    # Filter by project
+    # Loyiha bo'yicha filtrlash
     if project_id is not None:
         stmt = stmt.where(Task.project_id == project_id)
 
-    # Filter by completion status
+    # Bajarilganlik holati bo'yicha filtrlash
     if completed is True:
         stmt = stmt.where(Task.completed_at.isnot(None))
     elif completed is False:
         stmt = stmt.where(Task.completed_at.is_(None))
 
-    # Priority custom order expression: high (1) -> medium (2) -> low (3)
+    # Priority uchun SQL CASE ifodasi: high=1, medium=2, low=3
     priority_order = case(
         (Task.priority == TaskPriority.HIGH, 1),
         (Task.priority == TaskPriority.MEDIUM, 2),
@@ -79,21 +93,21 @@ def get_tasks(
         else_=4
     )
 
-    # Apply sorting
+    # Saralash mantiqi
     if sort_by == "priority" or sort_by == "priority_desc":
-        # high -> medium -> low
+        # Yuqoridan pastga: high -> medium -> low
         stmt = stmt.order_by(priority_order.asc(), Task.deadline.asc().nulls_last())
     elif sort_by == "priority_asc":
-        # low -> medium -> high
+        # Pastdan yuqoriga: low -> medium -> high
         stmt = stmt.order_by(priority_order.desc(), Task.deadline.asc().nulls_last())
     elif sort_by == "deadline" or sort_by == "deadline_asc":
-        # earliest deadline first
+        # Eng yaqin muddat birinchi
         stmt = stmt.order_by(Task.deadline.asc().nulls_last())
     elif sort_by == "deadline_desc":
-        # latest deadline first
+        # Eng uzoq muddat birinchi
         stmt = stmt.order_by(Task.deadline.desc().nulls_last())
     else:
-        # default sorting: high priority first, then deadline
+        # Standart: High priority birinchi, keyin yaratilgan vaqti
         stmt = stmt.order_by(priority_order.asc(), Task.created_at.desc())
 
     stmt = stmt.offset(skip).limit(limit)
@@ -101,7 +115,7 @@ def get_tasks(
 
 
 def get_task_by_id(db: Session, task_id: int, user_id: int) -> Optional[Task]:
-    """Retrieve single task ensuring strict user ownership."""
+    """Bitta vazifani ID va user_id bo'yicha qat'iy tekshirib olish."""
     stmt = select(Task).where(Task.id == task_id, Task.user_id == user_id)
     return db.execute(stmt).scalar_one_or_none()
 
@@ -112,10 +126,11 @@ def update_task(
     task_in: TaskUpdate,
     user_id: int
 ) -> Task:
-    """Update task details."""
+    """Vazifa ma'lumotlarini yangilash."""
     update_data = task_in.model_dump(exclude_unset=True)
 
-    # If project_id is being changed, verify ownership of new project
+    # Agar vazifaning loyihasi (project_id) o'zgartirilayotgan bo'lsa,
+    # yangi loyiha ham aynan shu foydalanuvchiga tegishli ekanini tekshiramiz
     if "project_id" in update_data and update_data["project_id"] != db_task.project_id:
         new_project_id = update_data["project_id"]
         project_stmt = select(Project).where(
@@ -129,7 +144,6 @@ def update_task(
                 detail="New target project not found or does not belong to you."
             )
 
-    # Normalize timezone for deadline if provided
     if "deadline" in update_data and update_data["deadline"] is not None:
         dl = update_data["deadline"]
         if dl.tzinfo is None:
@@ -145,8 +159,9 @@ def update_task(
 
 def set_task_status(db: Session, db_task: Task, completed: bool) -> Task:
     """
-    Mark task as completed or reopen.
-    Business Rule: Bajarilganda completed_at o'rnatilsin; qayta ochilganda tozalansin.
+    Vazifani bajarilgan deb belgilash yoki qayta ochish.
+    BIZNES QOIDASI: Bajarilganda completed_at hozirgi UTC vaqtga tenglanadi,
+    qayta ochilganda esa completed_at = None qilinadi (tozalanadi).
     """
     if completed:
         db_task.completed_at = datetime.now(timezone.utc)
@@ -159,16 +174,16 @@ def set_task_status(db: Session, db_task: Task, completed: bool) -> Task:
 
 
 def delete_task(db: Session, db_task: Task) -> None:
-    """Delete a task."""
+    """Vazifani o'chirish."""
     db.delete(db_task)
     db.commit()
 
 
 def get_overdue_tasks(db: Session, user_id: int, skip: int = 0, limit: int = 20) -> List[Task]:
     """
-    Business Rule:
-    Overdue: deadline < hozir va vazifa bajarilmagan (completed_at IS NULL).
-    Bajarilgan eski vazifa overdue ro'yxatiga kirmasin!
+    BIZNES QOIDASI VA HIMOYADA KO'RSATILADIGAN SSENARIY:
+    Overdue: deadline < hozirgi UTC vaqt VA vazifa bajarilmagan (completed_at IS NULL).
+    Agar eski vazifa bajarilgan bo'lsa, u hech qachon overdue ro'yxatiga kirmaydi!
     """
     now = datetime.now(timezone.utc)
     stmt = (
@@ -188,9 +203,10 @@ def get_overdue_tasks(db: Session, user_id: int, skip: int = 0, limit: int = 20)
 
 def get_task_statistics(db: Session, user_id: int) -> dict:
     """
-    Business Rule:
-    O'z vazifalari bo'yicha jami, bajarilgan va bajarilmagan sonlarni olish.
-    Boshqa foydalanuvchi ma'lumotlarini chiqarmasin.
+    BIZNES QOIDASI:
+    Foydalanuvchining o'z vazifalari bo'yicha jami, bajarilgan,
+    bajarilmagan va muddati o'tgan sonlarni bitta SQL aggregatsiya so'rovi bilan olish.
+    Boshqa foydalanuvchilar ma'lumotlari hisoblanmaydi.
     """
     now = datetime.now(timezone.utc)
 
