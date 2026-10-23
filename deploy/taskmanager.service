@@ -1,0 +1,18 @@
+[Unit]
+Description=FastAPI Task Manager Application Service
+After=network.target postgresql.service
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/task-manager-api
+EnvironmentFile=/home/ubuntu/task-manager-api/.env
+ExecStart=/home/ubuntu/task-manager-api/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
+
+Restart=always
+RestartSec=5s
+KillMode=mixed
+TimeoutStopSec=5s
+
+[Install]
+WantedBy=multi-user.target
